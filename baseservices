@@ -1,0 +1,55 @@
+
+class baseservices {
+
+	case $operatingsystem {
+		"Ubuntu": {
+			service { "nscd": enable => true, ensure => running, require => Package["nscd"]}
+			service { "rsyslog": enable => true, ensure => running }
+			service { "avahi-daemon": enable => false, ensure => stopped }
+
+		}
+
+		"RedHat","CentOS": {
+			service { "fcoe": enable => false, ensure => stopped }
+			service { "ip6tables": enable => false, ensure => stopped }
+			service { "pcscd": enable => false, ensure => stopped }
+			service { "avahi-daemon": enable => false, ensure => stopped }
+			service { "gpm": enable => false, ensure => stopped }
+			service { "isdn": enable => false, ensure => stopped }	
+			service { "iscsi": enable => false }
+			service { "iscsid": enable => false }
+			service { "snmptrapd": enable => false, ensure => stopped }
+			service { "snmpd": enable => false, ensure => stopped }
+			service { "hplip": enable => false, ensure => stopped }
+			service { "autofs": enable => false, ensure => stopped }
+			service { "NetworkManager": enable => false, ensure => stopped }
+			service { "rpcidmapd": enable => true, ensure => running }
+			service { "xinetd": enable => true, ensure => running }
+
+			case $hostname {
+				tor-ops1,tor-ops2,tp-infra1,tp-infra2,tor-nfs1,tor-nfs2: {
+					service { "nscd": enable => false, ensure => stopped }
+				}		
+
+				default: {
+					service { "nscd": enable => true, ensure => running }
+				}
+			}
+
+
+			if $operatingsystemrelease =~ /^5/ {
+				service { "syslog": enable => true, ensure => running }
+			}
+
+			if $operatingsystemrelease =~ /^6/ {
+				service { "messagebus": enable => true, ensure => running, require => Package["dbus"] }
+				service { "rsyslog": enable => true, ensure => running }
+
+				# This thing sucks, and has caused more problems than solved.
+				service { "abrtd": enable => false, ensure => stopped }
+			}
+		}
+	}
+
+}
+

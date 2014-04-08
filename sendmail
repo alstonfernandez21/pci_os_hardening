@@ -1,0 +1,110 @@
+
+class sendmail {
+	# Don't push out sendmail.cf updates to the mail servers themselves, only
+	# to things that use them as relays.
+
+	case $hostname {
+		localhost,tor-ops1,tor-ops2,tp-infra1,tp-infra2,tor-qa-mail,tor-pg2,tor-ft-web1: { }
+		default: {
+
+
+			# Set the mailhost appropriately. Sendmail can't directly use an
+			# IP, so we set the host file entry here.
+			if($ipaddress =~ /^10\.69\./) {
+
+				host { "tp-mailhost":
+					ensure => present,
+					host_aliases => "tp-mailhost.points.com",
+					ip => "10.69.20.181"
+				}
+
+				$mailhost = "tp-mailhost"
+			} else {
+				$mailhost = "mailhost"
+			}
+		
+			package { "sendmail": ensure => installed }
+			package { "postfix": ensure => absent }
+			package { "exim": ensure => absent }
+			
+			case $operatingsystem {
+				"RedHat","Centos": {
+
+					file { "/etc/mail/aliases":
+						ensure => absent
+					}
+
+					if $operatingsystemrelease =~ /^5\./ {
+						file { "/etc/mail/sendmail.cf":
+							owner => root,
+							group => root,
+							mode => 644,
+							content => template("conf/mail/sendmail.cf.rh5")
+						}
+					} else {
+						file { "/etc/mail/sendmail.cf":
+							owner => root,
+							group => root,
+							mode => 644,
+							content => template("conf/mail/sendmail.cf.rh6")
+						}								
+					}
+
+					service { "sendmail":
+						ensure => running,
+						enable => true,
+						require => Package["sendmail"],
+						subscribe => [ File["/etc/aliases"], File["/etc/mail/sendmail.cf"] ]
+					}
+				}
+
+				"Ubuntu": {
+					file { "/etc/mail/sendmail.mc":
+						owner => root,
+						group => smmsp,
+						require => Package["sendmail"],
+						content => template("conf/mail/sendmail.mc.ub1204"),
+						notify => Exec["make sendmail.cf"]
+					}
+
+					exec { "make sendmail.cf":
+						command => "/usr/bin/make sendmail.cf",
+						cwd => "/etc/mail",
+						subscribe => File["/etc/mail/sendmail.mc"],
+						refreshonly => true,
+						notify => Service["sendmail"]
+					}
+
+					service { "sendmail":
+						ensure => running,
+						enable => true,
+						require => Package["sendmail"]
+					}
+				}
+			}
+		}
+	}
+
+	file { "/etc/aliases":
+		mode => 644,
+		owner => root,
+		group => bin,
+		content => template("conf/mail/aliases")
+	}
+		
+	exec { "newaliases":
+		path => "/bin:/usr/bin:/usr/sbin",
+		subscribe => File["/etc/aliases"],
+		refreshonly => true
+	}
+
+	file { "/etc/mail/access":
+		owner => "root",
+		group => "root",
+		mode => "0644",
+		content => template("cis/access.erb"),
+		notify => Service["sendmail"],
+	}
+
+
+}
